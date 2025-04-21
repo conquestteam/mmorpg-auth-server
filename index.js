@@ -1,6 +1,6 @@
 const express = require('express');
 const { Pool } = require('pg');
-const bcrypt = require('bcryptjs'); // Убедись, что здесь bcryptjs, а не bcrypt
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
 
 const app = express();
@@ -24,15 +24,16 @@ pool.connect((err) => {
 
 // Эндпоинт для регистрации
 app.post('/register', async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, email } = req.body; // Добавили email
     if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
     }
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
+        // Вставляем пользователя в базу, включая email
         const result = await pool.query(
-            'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id',
-            [username, hashedPassword]
+            'INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id',
+            [username, hashedPassword, email || null] // email может быть null, если не указан
         );
         res.status(201).json({
             message: 'User registered successfully',
@@ -47,7 +48,7 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Эндпоинт для логина
+// Эндпоинт для логина (без изменений)
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
