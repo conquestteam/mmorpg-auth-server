@@ -25,15 +25,21 @@ pool.connect((err) => {
 // Эндпоинт для регистрации
 app.post('/register', async (req, res) => {
     const { username, password, email } = req.body; // Добавили email
-    if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
+    if (!username || !password || !email) {
+    return res.status(400).json({ error: 'Username, password, and email are required' });
+}
+
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email && !emailRegex.test(email)) { // Проверяем, если email указан
+        return res.status(400).json({ error: 'Invalid email format' });
     }
+
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         // Вставляем пользователя в базу, включая email
         const result = await pool.query(
             'INSERT INTO users (username, password, email) VALUES ($1, $2, $3) RETURNING id',
-            [username, hashedPassword, email || null] // email может быть null, если не указан
+            [username, hashedPassword, email] // email может быть null, если не указан
         );
         res.status(201).json({
             message: 'User registered successfully',
