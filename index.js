@@ -64,7 +64,7 @@ app.post('/register', async (req, res) => {
         );
 
         // Отправляем письмо пользователю
-        const confirmationUrl = `https://твой-сервер.onrender.com/confirm?token=${token}`;
+        const confirmationUrl = `https://mmorpg-auth-server.onrender.com/confirm?token=${token}`;
 
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
