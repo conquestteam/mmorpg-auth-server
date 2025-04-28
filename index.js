@@ -155,6 +155,54 @@ app.post('/login', async (req, res) => {
     }
 });
 
+// Эндпоинт для сохранения персонажа
+app.post('/api/character', async (req, res) => {
+    const { player_id, character_name, character_class, character_appearance, hair_color, hair_style, eye_color, skin_color, height, body_type } = req.body;
+
+    // Проверка, что все поля присутствуют
+    if (!player_id || !character_name || !character_class || !character_appearance || !hair_color || !hair_style || !eye_color || !skin_color || !height || !body_type) {
+        return res.status(400).json({ error: 'All character fields are required' });
+    }
+
+    try {
+        // Используем UPSERT: вставляем новую запись или обновляем существующую по player_id
+        await pool.query(
+            'INSERT INTO game.characters (player_id, character_name, character_class, character_appearance, hair_color, hair_style, eye_color, skin_color, height, body_type) ' +
+            'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ' +
+            'ON CONFLICT (player_id) DO UPDATE ' +
+            'SET character_name = $2, character_class = $3, character_appearance = $4, hair_color = $5, hair_style = $6, eye_color = $7, skin_color = $8, height = $9, body_type = $10',
+            [player_id, character_name, character_class, character_appearance, hair_color, hair_style, eye_color, skin_color, height, body_type]
+        );
+
+        res.status(200).json({ message: 'Character saved successfully' });
+    } catch (error) {
+        console.error('Error saving character:', error);
+        res.status(500).json({ error: 'Failed to save character', details: error.message });
+    }
+});
+
+// Эндпоинт для загрузки персонажа
+app.get('/api/character', async (req, res) => {
+    const playerId = req.query.player_id;
+
+    if (!playerId) {
+        return res.status(400).json({ error: 'player_id is required' });
+    }
+
+    try {
+        const result = await pool.query('SELECT * FROM game.characters WHERE player_id = $1', [playerId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Character not found' });
+        }
+
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error loading character:', error);
+        res.status(500).json({ error: 'Failed to load character', details: error.message });
+    }
+});
+
 // Эндпоинт для проверки активности сервера
 app.get('/ping', (req, res) => {
     res.status(200).send('pong');
