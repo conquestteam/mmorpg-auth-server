@@ -147,7 +147,7 @@ app.post('/login', async (req, res) => {
 
         res.status(200).json({
             message: 'Login successful',
-            userId: user.id
+            player_id: user.id.toString() // Изменяем userId на player_id и преобразуем в строку
         });
 
     } catch (error) {
