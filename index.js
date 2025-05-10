@@ -48,7 +48,6 @@ app.post('/register', async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Сохраняем пользователя с confirmed = false
         const userResult = await pool.query(
             'INSERT INTO users (username, password, email, confirmed) VALUES ($1, $2, $3, $4) RETURNING id',
             [username, hashedPassword, email, false]
@@ -57,13 +56,11 @@ app.post('/register', async (req, res) => {
         const userId = userResult.rows[0].id;
         const token = uuidv4();
 
-        // Сохраняем токен для подтверждения в базу
         await pool.query(
             'INSERT INTO email_confirmations (user_id, token) VALUES ($1, $2)',
             [userId, token]
         );
 
-        // Отправляем письмо пользователю
         const confirmationUrl = `https://mmorpg-auth-server.onrender.com/confirm?token=${token}`;
 
         await transporter.sendMail({
@@ -106,10 +103,7 @@ app.get('/confirm', async (req, res) => {
 
         const userId = tokenResult.rows[0].user_id;
 
-        // Обновляем статус пользователя
         await pool.query('UPDATE users SET confirmed = TRUE WHERE id = $1', [userId]);
-
-        // Удаляем использованный токен
         await pool.query('DELETE FROM email_confirmations WHERE user_id = $1', [userId]);
 
         res.status(200).send('Email confirmed successfully! You can now log in.');
@@ -147,7 +141,7 @@ app.post('/login', async (req, res) => {
 
         res.status(200).json({
             message: 'Login successful',
-            player_id: user.id.toString() // Изменяем userId на player_id и преобразуем в строку
+            player_id: user.id.toString()
         });
 
     } catch (error) {
@@ -159,13 +153,11 @@ app.post('/login', async (req, res) => {
 app.post('/api/character', async (req, res) => {
     const { player_id, character_name, character_class, character_appearance, hair_color, hair_style, eye_color, skin_color, height, body_type } = req.body;
 
-    // Проверка, что все поля присутствуют
     if (!player_id || !character_name || !character_class || !character_appearance || !hair_color || !hair_style || !eye_color || !skin_color || !height || !body_type) {
         return res.status(400).json({ error: 'All character fields are required' });
     }
 
     try {
-        // Используем UPSERT: вставляем новую запись или обновляем существующую по player_id
         await pool.query(
             'INSERT INTO game.characters (player_id, character_name, character_class, character_appearance, hair_color, hair_style, eye_color, skin_color, height, body_type) ' +
             'VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ' +
@@ -200,6 +192,66 @@ app.get('/api/character', async (req, res) => {
     } catch (error) {
         console.error('Error loading character:', error);
         res.status(500).json({ error: 'Failed to load character', details: error.message });
+    }
+});
+
+// Эндпоинт для отправки сообщений в чат
+app.post('/api/chat', async (req, res) => {
+    const { player_id, message } = req.body;
+
+    if (!player_id || !message) {
+        return res.status(400).json({ error: 'player_id and message are required' });
+    }
+
+    try {
+        // Найдём персонажа, чтобы взять его имя
+        const characterResult = await pool.query('SELECT character_name FROM game.characters WHERE player_id = $1', [player_id]);
+
+        if (characterResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Character not found' });
+        }
+
+        const senderName = characterResult.rows[0].character_name;
+
+        // Сохраняем сообщение в базу
+        const messageResult = await pool.query(
+            'INSERT INTO game.chat_messages (player_id, sender_name, message) VALUES ($1, $2, $3) RETURNING message_id, timestamp',
+            [player_id, senderName, message]
+        );
+
+        const newMessage = {
+            message_id: messageResult.rows[0].message_id,
+            player_id,
+            sender_name: senderName,
+            message,
+            timestamp: messageResult.rows[0].timestamp
+        };
+
+        res.status(200).json(newMessage);
+    } catch (error) {
+        console.error('Error saving chat message:', error);
+        res.status(500).json({ error: 'Failed to save chat message', details: error.message });
+    }
+});
+
+// Эндпоинт для получения сообщений чата
+app.get('/api/chat', async (req, res) => {
+    const { player_id } = req.query;
+
+    if (!player_id) {
+        return res.status(400).json({ error: 'player_id is required' });
+    }
+
+    try {
+        // Получаем последние 50 сообщений (для оптимизации)
+        const messagesResult = await pool.query(
+            'SELECT message_id, player_id, sender_name, message, timestamp FROM game.chat_messages ORDER BY timestamp DESC LIMIT 50'
+        );
+
+        res.status(200).json({ messages: messagesResult.rows });
+    } catch (error) {
+        console.error('Error loading chat messages:', error);
+        res.status(500).json({ error: 'Failed to load chat messages', details: error.message });
     }
 });
 
